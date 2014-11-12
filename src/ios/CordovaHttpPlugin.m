@@ -74,16 +74,25 @@
 - (void)post:(CDVInvokedUrlCommand*)command {
    HttpManager *manager = [HttpManager sharedClient];
    NSString *url = [command.arguments objectAtIndex:0];
-   NSDictionary *parameters = [command.arguments objectAtIndex:1];
+   id parameters = [command.arguments objectAtIndex:1];
    NSDictionary *headers = [command.arguments objectAtIndex:2];
    [self setRequestHeaders: headers];
    
    CordovaHttpPlugin* __weak weakSelf = self;
+   
+   if([parameters isKindOfClass:[NSString class] ]){
+       [[HttpManager sharedClient].requestSerializer setQueryStringSerializationWithBlock:^NSString *(NSURLRequest *request, NSDictionary *parameters, NSError *__autoreleasing *error) {
+           return (NSString*) parameters;
+       }];
+   }
+   
    manager.responseSerializer = [TextResponseSerializer serializer];
    [manager POST:url parameters:parameters success:^(AFHTTPRequestOperation *operation, id responseObject) {
       NSMutableDictionary *dictionary = [NSMutableDictionary dictionary];
       [dictionary setObject:[NSNumber numberWithInt:operation.response.statusCode] forKey:@"status"];
+      [dictionary setObject:operation.response.URL.absoluteString forKey:@"url"];
       [dictionary setObject:responseObject forKey:@"data"];
+      [dictionary setObject:operation.response.allHeaderFields forKey:@"headers"];
       CDVPluginResult *pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK messageAsDictionary:dictionary];
       [weakSelf.commandDelegate sendPluginResult:pluginResult callbackId:command.callbackId];
    } failure:^(AFHTTPRequestOperation *operation, NSError *error) {
@@ -105,10 +114,20 @@
    CordovaHttpPlugin* __weak weakSelf = self;
    
    manager.responseSerializer = [TextResponseSerializer serializer];
+   NSString* accept = [headers objectForKey:@"Accept"];
+   if(accept == nil){
+       accept = [headers objectForKey:@"accept"];
+   }
+   if(accept !=nil){
+       NSArray * acceptTypes = [accept componentsSeparatedByString: @";"];
+       manager.responseSerializer.acceptableContentTypes = [NSSet setWithArray:acceptTypes];
+   }
    [manager GET:url parameters:parameters success:^(AFHTTPRequestOperation *operation, id responseObject) {
       NSMutableDictionary *dictionary = [NSMutableDictionary dictionary];
       [dictionary setObject:[NSNumber numberWithInt:operation.response.statusCode] forKey:@"status"];
+      [dictionary setObject:operation.response.URL.absoluteString forKey:@"url"];
       [dictionary setObject:responseObject forKey:@"data"];
+      [dictionary setObject:operation.response.allHeaderFields forKey:@"headers"];
       CDVPluginResult *pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK messageAsDictionary:dictionary];
       [weakSelf.commandDelegate sendPluginResult:pluginResult callbackId:command.callbackId];
    } failure:^(AFHTTPRequestOperation *operation, NSError *error) {
